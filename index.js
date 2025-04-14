@@ -18,8 +18,8 @@ const config = {
   apiversion: "1",
   author: "",       // TODO: Your Battlesnake Username
   color: "#eb8fa9", // TODO: Choose color
-  head: "silly",  // TODO: Choose head, see https://play.battlesnake.com/customizations/ for options unlocked in your account
-  tail: "do-sammy",  // TODO: Choose tail, see https://play.battlesnake.com/customizations/ for options unlocked in your account
+  head: "beluga",  // TODO: Choose head, see https://play.battlesnake.com/customizations/ for options unlocked in your account
+  tail: "mystic-moon",  // TODO: Choose tail, see https://play.battlesnake.com/customizations/ for options unlocked in your account
 }
 
 //TODO: respond to GET requests on "/" with the config object above
