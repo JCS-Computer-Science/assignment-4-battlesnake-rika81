@@ -1,394 +1,367 @@
-export default function move(gameState) {
-    // Initialize move safety map
+export default function move(gameState){
     let moveSafety = {
-      up: true,
-      down: true,
-      left: true,
-      right: true
+        up: true,
+        down: true,
+        left: true,
+        right: true
     };
-  
-    // Helper: Manhattan Distance between two points.
-    function manhattanDistance(a, b) {
-      return Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
-    }
-  
-    // Helper: Flood Fill to compute reachable open area from a starting cell.
-    // It avoids obstacles (snake bodies, enemy bodies, hazards) and returns an integer area count.
-    function getReachableArea(start, board, obstacles) {
-      const { width, height } = board;
-      const visited = new Set();
-      const queue = [start];
-      let area = 0;
-  
-      while (queue.length > 0) {
-        const pos = queue.shift();
-        if (pos.x < 0 || pos.x >= width || pos.y < 0 || pos.y >= height) continue;
-        const key = `${pos.x},${pos.y}`;
-        if (visited.has(key)) continue;
-        if (obstacles.some(seg => seg.x === pos.x && seg.y === pos.y)) continue;
-        visited.add(key);
-        area++;
-        queue.push({ x: pos.x + 1, y: pos.y });
-        queue.push({ x: pos.x - 1, y: pos.y });
-        queue.push({ x: pos.x, y: pos.y + 1 });
-        queue.push({ x: pos.x, y: pos.y - 1 });
-      }
-      return area;
-    }
-  
-    // Extract key properties from the game state.
-    const food = gameState.board.food;
+
+
+    let prioritizeMove = {
+        up: 0,
+        down: 0,
+        left: 0,
+        right: 0,
+    };
+    const boardWidth = gameState.board.width;
+    const boardHeight = gameState.board.height;
     const myHead = gameState.you.body[0];
     const myNeck = gameState.you.body[1];
-    const enemySnakes = gameState.board.snakes;
+    const findFood = gameState.board.food;
+    const health = gameState.you.health;
+    const hazards = gameState.board.hazards;
+
+
+   
+    // We've included code to prevent your Battlesnake from moving backwards
+   
+    if (myNeck.x < myHead.x) {  // Neck is left of head, don't move left
+        moveSafety.left = false;
+       
+    } else if (myNeck.x > myHead.x) { // Neck is right of head, don't move right
+        moveSafety.right = false;
+       
+    } else if (myNeck.y < myHead.y) { // Neck is below head, don't move down
+        moveSafety.down = false;
+       
+    } else if (myNeck.y > myHead.y) { // Neck is above head, don't move up
+        moveSafety.up = false;
+    }
+   
+    // TODO: Step 1 - Prevent your Battlesnake from moving out of bounds
+    // gameState.board contains an object representing the game board including its width and height
+    // https://docs.battlesnake.com/api/objects/board
+    if (myHead.x == 0){
+        moveSafety.left = false;
+        console.log("Do not move left, out of bounds")
+    }
+
+
+    if (myHead.y == 0){
+        moveSafety.down = false;
+        console.log("Do not move down, out of bounds")
+    }
+
+
+    if (myHead.x == gameState.board.width - 1){
+        moveSafety.right = false;
+        console.log("Do not move right, out of bounds")
+    }
+
+
+    if (myHead.y == gameState.board.height - 1){
+        moveSafety.up = false;
+        console.log("Do not move up, out of bounds")
+    }
+    //avoid bounds I created if necessary
+
+
+    if (myHead.x == 1){
+        prioritizeMove.left = -5;
+        console.log("Do not moooove left, out of bounds")
+    }
+
+
+    if (myHead.y == 1){
+        prioritizeMove.down = -5;
+        console.log("Do not moooove down, out of bounds")
+    }
+
+
+    if (myHead.x == boardWidth - 2){
+        prioritizeMove.right = -5;
+        console.log("Do not moooove right, out of bounds")
+    }
+
+
+    if (myHead.y == boardHeight - 2){
+        prioritizeMove.up = -5;
+        console.log("Do not moooove up, out of bounds")
+    }
+
+
+
+
+    // TODO: Step 2 - Prevent your Battlesnake from colliding with itself
+    // gameState.you contains an object representing your snake, including its coordinates
+    // https://docs.battlesnake.com/api/objects/battlesnake
     const myBody = gameState.you.body;
-    const myHealth = gameState.you.health;
-    const myLength = myBody.length;
-  
-    // Royale mode: treat hazards as deadly obstacles.
-    const hazards = gameState.board.hazards || [];
-  
-    // Prevent reversing into your neck.
-    if (myNeck.x < myHead.x) moveSafety.left = false;
-    if (myNeck.x > myHead.x) moveSafety.right = false;
-    if (myNeck.y < myHead.y) moveSafety.down = false;
-    if (myNeck.y > myHead.y) moveSafety.up = false;
-  
-    // Avoid moving out of bounds.
-    if (myHead.x === 0) moveSafety.left = false;
-    if (myHead.y === 0) moveSafety.down = false;
-    if (myHead.x === gameState.board.width - 1) moveSafety.right = false;
-    if (myHead.y === gameState.board.height - 1) moveSafety.up = false;
-  
-    // Avoid colliding with your own body (checking adjacent segments).
-    for (const segment of myBody.slice(1)) {
-      if (segment.x === myHead.x && segment.y === myHead.y + 1) moveSafety.up = false;
-      if (segment.x === myHead.x && segment.y === myHead.y - 1) moveSafety.down = false;
-      if (segment.x === myHead.x - 1 && segment.y === myHead.y) moveSafety.left = false;
-      if (segment.x === myHead.x + 1 && segment.y === myHead.y) moveSafety.right = false;
-    }
-  
-    // Avoid colliding with enemy snake bodies.
-    for (const snake of enemySnakes) {
-      for (const segment of snake.body) {
-        if (segment.x === myHead.x && segment.y === myHead.y + 1) moveSafety.up = false;
-        if (segment.x === myHead.x && segment.y === myHead.y - 1) moveSafety.down = false;
-        if (segment.x === myHead.x - 1 && segment.y === myHead.y) moveSafety.left = false;
-        if (segment.x === myHead.x + 1 && segment.y === myHead.y) moveSafety.right = false;
-      }
-    }
-  
-    // Avoid hazards adjacent to your head.
-    for (const hazard of hazards) {
-      if (hazard.x === myHead.x && hazard.y === myHead.y + 1) moveSafety.up = false;
-      if (hazard.x === myHead.x && hazard.y === myHead.y - 1) moveSafety.down = false;
-      if (hazard.x === myHead.x - 1 && hazard.y === myHead.y) moveSafety.left = false;
-      if (hazard.x === myHead.x + 1 && hazard.y === myHead.y) moveSafety.right = false;
-    }
-  
-    // Define potential new head positions (1 move lookahead).
-    const potentialMoves = {
-      up: { x: myHead.x, y: myHead.y + 1 },
-      down: { x: myHead.x, y: myHead.y - 1 },
-      left: { x: myHead.x - 1, y: myHead.y },
-      right: { x: myHead.x + 1, y: myHead.y }
-    };
-  
-    // Check each move for out-of-bounds conditions.
-    for (const [move, position] of Object.entries(potentialMoves)) {
-      if (
-        position.x < 0 ||
-        position.x >= gameState.board.width ||
-        position.y < 0 ||
-        position.y >= gameState.board.height
-      ) {
-        moveSafety[move] = false;
-      }
-    }
-  
-    // Disqualify moves that directly collide with any segment of your body.
-    for (const segment of myBody) {
-      for (const [move, position] of Object.entries(potentialMoves)) {
-        if (position.x === segment.x && position.y === segment.y) {
-          moveSafety[move] = false;
+    for (let i = 1; i < myBody.length - 1; i++){
+       
+        const avoid = myBody[i];
+        if (avoid.x == myHead.x - 1 && avoid.y == myHead.y){
+            moveSafety.left = false;
+            console.log("Do not move left, self-collision")
         }
-      }
-    }
-  
-    // One-move lookahead simulation to check future collision with your own updated body.
-    for (const [move, position] of Object.entries(potentialMoves)) {
-      if (moveSafety[move]) {
-        const newHead = position;
-        const newBody = [newHead, ...myBody.slice(0, -1)];
-        for (let i = 1; i < newBody.length; i++) {
-          if (newHead.x === newBody[i].x && newHead.y === newBody[i].y) {
-            moveSafety[move] = false;
-          }
+
+
+        if (avoid.x == myHead.x && avoid.y == myHead.y - 1){
+            moveSafety.down = false;
+            console.log("Do not move down, self-collision")
         }
-      }
-    }
-  
-    // Avoid self-traps by simulating one more move ahead.
-    for (const [move, position] of Object.entries(potentialMoves)) {
-      if (moveSafety[move]) {
-        const newHead = position;
-        const newBody = [newHead, ...myBody.slice(0, -1)];
-        const futureMoveSafety = { up: true, down: true, left: true, right: true };
-        const futurePotentialMoves = {
-          up: { x: newHead.x, y: newHead.y + 1 },
-          down: { x: newHead.x, y: newHead.y - 1 },
-          left: { x: newHead.x - 1, y: newHead.y },
-          right: { x: newHead.x + 1, y: newHead.y }
-        };
-  
-        for (const [futureMove, futurePosition] of Object.entries(futurePotentialMoves)) {
-          for (const segment of newBody) {
-            if (futurePosition.x === segment.x && futurePosition.y === segment.y) {
-              futureMoveSafety[futureMove] = false;
-            }
-          }
-          if (
-            futurePosition.x < 0 ||
-            futurePosition.x >= gameState.board.width ||
-            futurePosition.y < 0 ||
-            futurePosition.y >= gameState.board.height
-          ) {
-            futureMoveSafety[futureMove] = false;
-          }
-          // Also avoid future hazards.
-          for (const hazard of hazards) {
-            if (futurePosition.x === hazard.x && futurePosition.y === hazard.y) {
-              futureMoveSafety[futureMove] = false;
-            }
-          }
+
+
+        if (avoid.x == myHead.x + 1 && avoid.y == myHead.y){
+            moveSafety.right = false;
+            console.log("Do not move right, self-collision")
         }
-        if (!Object.values(futureMoveSafety).some(Boolean)) {
-          moveSafety[move] = false;
+
+
+        if (avoid.x == myHead.x && avoid.y == myHead.y + 1){
+            moveSafety.up = false;
+            console.log("Do not move up, self-collision")
         }
-      }
     }
-  
-    // ===== Additional Check for Same-Length Head-to-Head Collisions =====
-    enemySnakes.forEach(snake => {
-      if (snake.id === gameState.you.id) return;
-      if (snake.body.length === myLength) {
+   
+    // TODO: Step 3 - Prevent your Battlesnake from colliding with other Battlesnakes
+    // gameState.board.snakes contains an array of enemy snake objects, which includes their coordinates
+    // https://docs.battlesnake.com/api/objects/battlesnake
+
+
+    for (const snake of gameState.board.snakes) {
         const enemyHead = snake.body[0];
-        const enemyPotentialMoves = {
-          up: { x: enemyHead.x, y: enemyHead.y + 1 },
-          down: { x: enemyHead.x, y: enemyHead.y - 1 },
-          left: { x: enemyHead.x - 1, y: enemyHead.y },
-          right: { x: enemyHead.x + 1, y: enemyHead.y }
-        };
-        for (const [move, pos] of Object.entries(potentialMoves)) {
-          for (const enemyMove of Object.values(enemyPotentialMoves)) {
-            if (pos.x === enemyMove.x && pos.y === enemyMove.y) {
-              moveSafety[move] = false;
+        const enemyBody = snake.body;
+   
+        // positions near the enemy head
+        const headAdjacentPositions = [
+            { x: enemyHead.x, y: enemyHead.y + 1, direction: "up" },
+            { x: enemyHead.x, y: enemyHead.y - 1, direction: "down" },
+            { x: enemyHead.x - 1, y: enemyHead.y, direction: "left" },
+            { x: enemyHead.x + 1, y: enemyHead.y, direction: "right" }
+        ];
+   
+        for (const pos of headAdjacentPositions) {
+            if (pos.x === myHead.x && pos.y === myHead.y) {
+                moveSafety[pos.direction] = false;
+                console.log(`Avoid ${pos.direction}: ENEMY HEAD nearby`);
             }
-          }
         }
-      }
-    });
-  
-    // ===== Additional Check for Larger Snakes Head-to-Head Collisions =====
-    enemySnakes.forEach(snake => {
-      if (snake.id === gameState.you.id) return;
-      if (snake.body.length > myLength) {
-        const enemyHead = snake.body[0];
-        const enemyPotentialMoves = {
-          up: { x: enemyHead.x, y: enemyHead.y + 1 },
-          down: { x: enemyHead.x, y: enemyHead.y - 1 },
-          left: { x: enemyHead.x - 1, y: enemyHead.y },
-          right: { x: enemyHead.x + 1, y: enemyHead.y }
-        };
-        for (const [move, pos] of Object.entries(potentialMoves)) {
-          for (const enemyMove of Object.values(enemyPotentialMoves)) {
-            if (pos.x === enemyMove.x && pos.y === enemyMove.y) {
-              moveSafety[move] = false;
+   
+        // dont go there
+        const dangerZonePositions = [
+            { x: enemyHead.x, y: enemyHead.y + 2, direction: "up" },
+            { x: enemyHead.x, y: enemyHead.y - 2, direction: "down" },
+            { x: enemyHead.x - 2, y: enemyHead.y, direction: "left" },
+            { x: enemyHead.x + 2, y: enemyHead.y, direction: "right" }
+        ];
+   
+        for (const pos of dangerZonePositions) {
+            if (pos.x === myHead.x && pos.y === myHead.y) {
+                prioritizeMove[pos.direction] -= 10;
+                console.log(`Avoid ${pos.direction}: danger zone near ENEMY HEAD`);
             }
-          }
         }
-      }
-    });
-    // =====================================================================
-  
-    // -------------------------------
-    // Multi-Move Lookahead with Food & Aggressive Bonuses for Royale Mode
-    // -------------------------------
-    const LOOKAHEAD_DEPTH = 2;
-    let enemyBodies = [];
-    for (const snake of enemySnakes) {
-      if (snake.id !== gameState.you.id) {
-        enemyBodies = enemyBodies.concat(snake.body);
-      }
+   
+        // diagonal positions near the enemy head
+        const diagonalPositions = [
+            { x: enemyHead.x - 1, y: enemyHead.y - 1, directions: ["down", "left"] },
+            { x: enemyHead.x + 1, y: enemyHead.y + 1, directions: ["up", "right"] },
+            { x: enemyHead.x - 1, y: enemyHead.y + 1, directions: ["up", "left"] },
+            { x: enemyHead.x + 1, y: enemyHead.y - 1, directions: ["down", "right"] }
+        ];
+   
+        for (const pos of diagonalPositions) {
+            if (pos.x === myHead.x && pos.y === myHead.y) {
+                for (const dir of pos.directions) {
+                    prioritizeMove[dir] -= 10;
+                }
+                console.log(`Avoid diagonal: ${pos.directions.join(" and ")} near ENEMY HEAD`);
+            }
+        }
+   
+        // // diagonal positions near enemy body
+        for (let i = 1; i < enemyBody.length; i++) {
+            const segment = enemyBody[i];
+   
+            if (segment.x === myHead.x && segment.y === myHead.y + 1) {
+                moveSafety.up = false;
+                console.log("Avoid up: enemy body collision");
+            }
+            if (segment.x === myHead.x && segment.y === myHead.y - 1) {
+                moveSafety.down = false;
+                console.log("Avoid down: enemy body collision");
+            }
+            if (segment.x === myHead.x - 1 && segment.y === myHead.y) {
+                moveSafety.left = false;
+                console.log("Avoid left: enemy body collision");
+            }
+            if (segment.x === myHead.x + 1 && segment.y === myHead.y) {
+                moveSafety.right = false;
+                console.log("Avoid right: enemy body collision");
+            }
+        }
     }
-  
-    // Helper for simulation: get safe moves for simulation (including hazards).
-    function getSafeMovesForSimulation(snakeBody, board, enemyBodies) {
-      const head = snakeBody[0];
-      const possibleMoves = [];
-      const moves = {
-        up: { x: head.x, y: head.y + 1 },
-        down: { x: head.x, y: head.y - 1 },
-        left: { x: head.x - 1, y: head.y },
-        right: { x: head.x + 1, y: head.y }
-      };
-  
-      for (const [dir, pos] of Object.entries(moves)) {
-        if (pos.x < 0 || pos.x >= board.width || pos.y < 0 || pos.y >= board.height)
-          continue;
-        const obstacles = snakeBody.slice(0, -1).concat(enemyBodies, hazards);
-        if (obstacles.some(seg => seg.x === pos.x && seg.y === pos.y)) continue;
-        possibleMoves.push(dir);
-      }
-      return possibleMoves;
+
+
+   
+    // TODO: Step 4 - Move towards food instead of random, to regain health and survive longer
+    // gameState.board.food contains an array of food coordinates https://docs.battlesnake.com/api/objects/board
+    if (health < 100 && findFood.length > 0) {
+        for (let i = 0; i < findFood.length; i++) {
+            const food = findFood[i];
+            const distanceUp = food.y - myHead.y;
+            const distanceDown = myHead.y - food.y;
+            const distanceLeft = myHead.x - food.x;
+            const distanceRight = food.x - myHead.x;
+           
+            if (distanceUp > 0) {
+                prioritizeMove.up += 10;
+                console.log("Prioritize up: food");        
+            }
+            if (distanceDown > 0) {
+                prioritizeMove.down += 10;
+                console.log("Prioritize down: food");
+            }
+            if (distanceLeft > 0) {
+                prioritizeMove.left += 10;
+                console.log("Prioritize left: food");
+            }
+            if (distanceRight > 0) {
+                prioritizeMove.right += 10;
+                console.log("Prioritize right: food");
+            }
+        }
     }
-  
-    // Recursive multi-move lookahead simulation.
-    function simulateLookahead(snakeBody, board, enemyBodies, depth) {
-      const head = snakeBody[0];
-      const obstacles = snakeBody.slice(1).concat(enemyBodies, hazards);
-      const currentScore = getReachableArea(head, board, obstacles);
-      if (depth === 0) return currentScore;
-  
-      const safeMoves = getSafeMovesForSimulation(snakeBody, board, enemyBodies);
-      if (safeMoves.length === 0) return -Infinity;
-  
-      let bestChildScore = -Infinity;
-      const movesMapping = {
-        up: { x: head.x, y: head.y + 1 },
-        down: { x: head.x, y: head.y - 1 },
-        left: { x: head.x - 1, y: head.y },
-        right: { x: head.x + 1, y: head.y }
-      };
-  
-      for (const move of safeMoves) {
-        const newHead = movesMapping[move];
-        const newSnakeBody = [newHead].concat(snakeBody.slice(0, snakeBody.length - 1));
-        const childScore = simulateLookahead(newSnakeBody, board, enemyBodies, depth - 1);
-        if (childScore > bestChildScore) bestChildScore = childScore;
-      }
-      const discountFactor = 0.9;
-      return currentScore + discountFactor * bestChildScore;
+
+
+
+
+    //Avoids hazards
+    for (let i = 0; i < hazards.length; i++) {
+        let hazard = hazards[i];
+        if (hazard.x === myHead.x && hazard.y === myHead.y + 1) {
+            prioritizeMove.up -= 10;
+            console.log("Avoid up: hazard");
+        }
+        if (hazard.x === myHead.x && hazard.y === myHead.y - 1) {
+            prioritizeMove.down -= 10;
+            console.log("Avoid down: hazard");
+        }
+        if (hazard.x === myHead.x - 1 && hazard.y === myHead.y) {
+            prioritizeMove.left -= 10;
+            console.log("Avoid left: hazard");
+        }
+        if (hazard.x === myHead.x + 1 && hazard.y === myHead.y) {
+            prioritizeMove.right -= 10;
+            console.log("Avoid right: hazard");
+        }
     }
-  
-    // Final move selection: combine lookahead, food targeting, enemy scoring, and storm awareness.
+
+
+    // Follow tail when health is above 90
+        if (health > 90 || hazards.length > 0) {
+            const tail = myBody[myBody.length - 1];
+            const tailMoves = [];
+
+
+        if (tail.x < myHead.x && moveSafety.left) {
+            prioritizeMove.left += 10;
+            tailMoves.push("left");
+        }
+        if (tail.x > myHead.x && moveSafety.right) {
+            prioritizeMove.right += 10;
+            tailMoves.push("right");
+        }
+        if (tail.y < myHead.y && moveSafety.down) {
+            prioritizeMove.down += 10;
+            tailMoves.push("down");
+        }
+        if (tail.y > myHead.y && moveSafety.up) {
+            prioritizeMove.up += 10;
+            tailMoves.push("up");
+        }
+        //if detect
+        if (tailMoves.length > 0) {
+            const nextMove = tailMoves[Math.floor(Math.random() * tailMoves.length)];
+            console.log(`MOVE ${gameState.turn}: Following tail with move ${nextMove}`);
+            return { move: nextMove };
+        }
+
+
+        //avoid dead ends
+        const safeTailMoves = tailMoves.filter(move => {
+            const position = {
+                left: { x: myHead.x - 1, y: myHead.y },
+                right: { x: myHead.x + 1, y: myHead.y },
+                down: { x: myHead.x, y: myHead.y - 1 },
+                up: { x: myHead.x, y: myHead.y + 1 }
+            }[move];
+            const openSpaces = findOpenSpaces(position, myBody, gameState.board, hazards);
+            return openSpaces > 2;
+        });
+   
+        // follow tail if safe moves exist
+        if (safeTailMoves.length > 0) {
+            const nextMove = safeTailMoves[Math.floor(Math.random() * safeTailMoves.length)];
+            console.log(`MOVE ${gameState.turn}: Following tail with move ${nextMove}`);
+            return { move: nextMove };
+        }
+    }
+   
+    // count open spaces
+    function findOpenSpaces(start, snakeBody, board, hazards) {
+        const visited = new Set();
+        const stack = [start];
+        let openSpaces = 0;
+   
+        while (stack.length > 0) {
+            const current = stack.pop();
+            const key = `${current.x},${current.y}`;
+   
+            if (visited.has(key)) continue;
+            visited.add(key);
+   
+            // Check boundaries and obstacles
+            if (
+                current.x < 0 || current.x >= board.width ||
+                current.y < 0 || current.y >= board.height ||
+                snakeBody.some(segment => segment.x === current.x && segment.y === current.y) ||
+                hazards.some(hazard => hazard.x === current.x && hazard.y === current.y) ||
+                board.snakes.flatMap(snake => snake.body).some(segment => segment.x === current.x && segment.y === current.y)
+            ) {
+                continue;
+            }
+   
+            openSpaces++;
+            stack.push(
+                { x: current.x, y: current.y + 1 }, // up
+                { x: current.x, y: current.y - 1 }, // down
+                { x: current.x - 1, y: current.y }, // left
+                { x: current.x + 1, y: current.y }  // right
+            );
+        }
+   
+        return openSpaces;
+    }
+   
+
+
+    // Are there any safe moves left?
+   
+    //Object.keys(moveSafety) returns ["up", "down", "left", "right"]
+    //.filter() filters the array based on the function provided as an argument (using arrow function syntax here)
+    //In this case we want to filter out any of these directions for which moveSafety[direction] == false
     const safeMoves = Object.keys(moveSafety).filter(direction => moveSafety[direction]);
     if (safeMoves.length === 0) {
-      console.log(`MOVE ${gameState.turn}: No safe moves detected! Moving down`);
-      return { move: "down" };
+        console.log(`MOVE ${gameState.turn}: No safe moves detected! Moving down`);
+        return { move: "down" };
     }
-  
-    // Compute the closest food based on Manhattan distance.
-    let closestFood = null;
-    let minDistance = Infinity;
-    if (food.length > 0) {
-      for (const f of food) {
-        const d = manhattanDistance(myHead, f);
-        if (d < minDistance) {
-          closestFood = f;
-          minDistance = d;
-        }
-      }
-    }
-  
-    // Dynamically adjust food weighting: if you're smaller than the largest enemy, prioritize food even more.
-    let enemyMaxLength = 0;
-    enemySnakes.forEach(snake => {
-      if (snake.id !== gameState.you.id && snake.body.length > enemyMaxLength) {
-        enemyMaxLength = snake.body.length;
-      }
-    });
-    let FOOD_WEIGHT = myLength < enemyMaxLength ? 20 : 10;
-  
-    let bestScore = -Infinity;
-    let bestMove = safeMoves[0];
-    for (const move of safeMoves) {
-      const newHead = potentialMoves[move];
-      const newSnakeBody = [newHead].concat(myBody.slice(0, myBody.length - 1));
-      let score = simulateLookahead(newSnakeBody, gameState.board, enemyBodies, LOOKAHEAD_DEPTH);
-  
-      // Food bonus: reward moves that decrease Manhattan distance to the closest food.
-      if (closestFood) {
-        const currentDist = manhattanDistance(myHead, closestFood);
-        const newDist = manhattanDistance(newHead, closestFood);
-        const foodBonus = (currentDist - newDist) * FOOD_WEIGHT;
-        score += foodBonus;
-      }
-  
-      // Food Cluster Bonus: count nearby food items (within a Manhattan distance threshold).
-      let foodClusterBonus = 0;
-      const FOOD_CLUSTER_RADIUS = 3;  // Tune this radius as needed.
-      for (const f of food) {
-        const d = manhattanDistance(newHead, f);
-        if (d <= FOOD_CLUSTER_RADIUS) {
-          // The closer the food, the higher the bonus.
-          foodClusterBonus += (FOOD_CLUSTER_RADIUS - d) * 5;
-        }
-      }
-      score += foodClusterBonus;
-  
-      // Aggressive bonus/penalty for enemy snakes.
-      let enemyBonus = 0;
-      for (const enemy of enemySnakes) {
-        if (enemy.id === gameState.you.id) continue;
-        const enemyHead = enemy.body[0];
-        const currentEnemyDist = manhattanDistance(myHead, enemyHead);
-        const newEnemyDist = manhattanDistance(newHead, enemyHead);
-        if (enemy.body.length < myLength && newEnemyDist < currentEnemyDist) {
-          enemyBonus += (currentEnemyDist - newEnemyDist) * 15;
-        } else if (enemy.body.length === myLength && newEnemyDist < currentEnemyDist) {
-          enemyBonus -= (currentEnemyDist - newEnemyDist) * 20;
-        }
-      }
-      // If there is a strong food cluster bonus, reduce the enemy bonus effect so food is prioritized.
-      if (foodClusterBonus > 0) {
-        enemyBonus *= 0.5;
-      }
-      score += enemyBonus;
-  
-      // Optional trap bonus for steering space.
-      let trapBonus = 0;
-      if (
-        newHead.x === 0 ||
-        newHead.x === gameState.board.width - 1 ||
-        newHead.y === 0 ||
-        newHead.y === gameState.board.height - 1
-      ) {
-        trapBonus += 5;
-      }
-      score += trapBonus;
-  
-      // ===== Storm Awareness =====
-      // If the game state includes storm details, add a bonus for moves that are inside the storm's safe zone
-      // and a penalty for moves outside it. Even if no outcomes are safe, the snake will stick around, choosing
-      // the move that maximizes survival until a safe exit appears.
-      if (gameState.board.storm && gameState.board.storm.x !== undefined) {
-        const stormZone = gameState.board.storm;
-        // Function to determine whether a position is inside the storm's safe zone.
-        function inStormSafeZone(pos) {
-          return pos.x >= stormZone.x && pos.x < stormZone.x + stormZone.width &&
-                 pos.y >= stormZone.y && pos.y < stormZone.y + stormZone.height;
-        }
-        if (inStormSafeZone(newHead)) {
-          score += 50; // Bonus for being in the safe zone.
-        } else {
-          score -= 200; // Penalty for being outside the safe zone.
-        }
-      }
-      // =========================
-  
-      console.log(
-        `MOVE ${gameState.turn}: Move ${move} -> score = ${score} ` +
-        `(Food bonus: ${closestFood ? (manhattanDistance(myHead, closestFood) - manhattanDistance(newHead, closestFood)) * FOOD_WEIGHT : 0}, ` +
-        `Food Cluster Bonus: ${foodClusterBonus}, Enemy bonus: ${enemyBonus}, Trap bonus: ${trapBonus})`
-      );
-      if (score > bestScore) {
-        bestScore = score;
-        bestMove = move;
-      }
-    }
-  
-    console.log(`MOVE ${gameState.turn}: Selected move ${bestMove} with overall score ${bestScore}`);
-    return { move: bestMove };
-  }
-  
+
+
+    const nextMove = safeMoves[Math.floor(Math.random() * safeMoves.length)];
+    console.log(`MOVE ${gameState.turn}: Random safe move ${nextMove}`);
+    return { move: nextMove };
+}
+
+
+
