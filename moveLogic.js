@@ -159,7 +159,7 @@ export default function move(gameState) {
       }
     }
  
-    // no head collisions
+    // no head collision
     enemySnakes.forEach(snake => {
       if (snake.id === gameState.you.id) return;
       if (snake.body.length === myLength) {
